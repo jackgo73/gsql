@@ -1,0 +1,85 @@
+#!/bin/sh
+echo 000:$0
+echo 111:$1
+echo 222:$2
+program='gsql'
+version='(unversioned)'
+
+die() {
+    echo "error: $@" >&2
+    exit 1
+}
+
+sub_help(){
+    echo "Usage: $program <subcommand> [options]\n"
+    echo "Subcommands:"
+    echo "    bar   Do bar"
+    echo "    baz   Run baz"
+    echo ""
+    echo "For help with each subcommand run:"
+    echo "$program <subcommand> -h|--help"
+    echo ""
+}
+
+sub_init_echo_archives() {
+    option=$1
+    case $option
+    in
+        pg1016)  echo "https://ftp.postgresql.org/pub/source/v10.16/postgresql-10.16.tar.gz"
+        ;;
+        pg1111)  echo "https://ftp.postgresql.org/pub/source/v11.11/postgresql-11.11.tar.gz"
+        ;;
+        pg1206)  echo "https://ftp.postgresql.org/pub/source/v12.6/postgresql-12.6.tar.gz"
+        ;;
+        pg1302)  echo "https://ftp.postgresql.org/pub/source/v13.2/postgresql-13.2.tar.gz"
+        ;;
+        *     )  die "Unknown version $option"
+        ;;
+    esac
+}
+
+
+sub_init(){
+    base_url='https://www.postgresql.org/ftp/source'
+    echo "[1] Start downloading at $base_url"
+    if type wget > /dev/null ; then
+        fetch='wget'
+    else
+        fetch='curl -LO -u anonymous:'
+    fi
+    directory=$2
+    for ar in $(sub_init_echo_archives $1)
+    do
+        echo $ar
+    done
+    [ -d "${directory}" ] || die "No base directory: ${directory}"
+    [ -d "${directory}/$1" ] || mkdir -p ${directory}/$1
+}
+
+sub_run(){
+    echo "Running 'baz' command."
+    echo "First arg is '$1'."
+    echo "Second arg is '$2'."
+}
+
+sub_stop(){
+    echo "stop"
+}
+
+
+
+subcommand=$1
+case $subcommand in
+    "" | "-h" | "--help")
+        sub_help
+        ;;
+    *)
+        shift
+        sub_${subcommand} $@
+        if [ $? = 127 ]; then
+            echo "Error: '$subcommand' is not a known subcommand." >&2
+            echo "       Run '$program --help' for a list of known subcommands." >&2
+            exit 1
+        fi
+        ;;
+esac
