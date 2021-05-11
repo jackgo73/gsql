@@ -1,14 +1,24 @@
 #!/bin/sh
-echo 000:$0
-echo 111:$1
-echo 222:$2
+
 program='gsql'
 version='(unversioned)'
+logfile="/tmp/gsql84.log"
 
 die() {
     echo "error: $@" >&2
+    echo "error: $@" >> $logfile
     exit 1
 }
+
+OS=$(uname)
+case $OS
+in
+    "Linux") echo "[0]os: $OS" 2>&1 | tee -a ${logfile}
+    ;;
+    *) die "$OS not supported"
+    ;;
+esac
+
 
 sub_help(){
     echo "Usage: $program <subcommand> [options]\n"
@@ -40,20 +50,40 @@ sub_init_echo_archives() {
 
 
 sub_init(){
-    base_url='https://www.postgresql.org/ftp/source'
-    echo "[1] Start downloading at $base_url"
     if type wget > /dev/null ; then
         fetch='wget'
     else
         fetch='curl -LO -u anonymous:'
     fi
-    directory=$2
-    for ar in $(sub_init_echo_archives $1)
-    do
-        echo $ar
-    done
-    [ -d "${directory}" ] || die "No base directory: ${directory}"
-    [ -d "${directory}/$1" ] || mkdir -p ${directory}/$1
+    local port=$3
+    [ ${port} ] ||  die "No port"
+    local directory=$2
+    local addr=$(sub_init_echo_archives $1)
+    local filename=${addr##*/}
+    local filena=${filename::-7}
+    echo "[1]check root directory" 2>&1 | tee -a ${logfile}
+    [ -d "${directory}" ]          ||  die "No base directory: ${directory}"
+    [ -d "${directory}/download" ] ||  mkdir ${directory}/download
+    [ -d "${directory}/src" ]      ||  mkdir ${directory}/src
+    [ -d "${directory}/data" ]     ||  mkdir ${directory}/data
+    [ -d "${directory}/bin" ]      ||  mkdir ${directory}/bin
+    echo "[2]download source code: $filename" 2>&1 | tee -a ${logfile}
+    [ -e "${directory}/download/${filename}" ] || ${fetch} -O "${directory}/download/${filename}" "${addr}" >> ${logfile} 2>&1 || die "Cannot download ${filename} from ${addr}"
+    echo "[3]unpack: $filename" 2>&1 | tee -a ${logfile}
+    [ -d "${directory}/src/${filena}" ] || tar xzf "${directory}/download/${filename}" -C ${directory}/src/ >> ${logfile} 2>&1 || die "Cannot extract package from ${filename}"
+
+    echo "[4]yum install" 2>&1 | tee -a ${logfile}
+    sudo yum -y install coreutils glib2 lrzsz mpstat dstat sysstat e4fsprogs xfsprogs ntp readline-devel zlib-devel openssl-devel pam-devel libxml2-devel libxslt-devel python-devel tcl-devel gcc make smartmontools flex bison perl-devel perl-ExtUtils* openldap-devel jadetex openjade bzip2 >> ${logfile} 2>&1 || die "echo \"$USER ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/test"
+
+    echo "[5]sysctl"  2>&1 | tee -a ${logfile}
+
+    echo "[6]configure port: ${port}"
+    cd ${directory}/src/${filena} && ./configure --prefix=${directory}/bin/$1 --with-pgport=${port} --enable-depend --enable-cassert --enable-debug CFLAGS="-ggdb -O0" >> ${logfile} 2>&1 || die "configure failed"
+
+    echo "[7]make&make install"
+    cd ${directory}/src/${filena} && make -j16  >> ${logfile} 2>&1 || die "make failed"
+    cd ${directory}/src/${filena} && make install >> ${logfile} 2>&1 || die "make install failed"
+
 }
 
 sub_run(){
