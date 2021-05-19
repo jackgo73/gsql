@@ -13,7 +13,7 @@ die() {
 OS=$(uname)
 case $OS
 in
-    "Linux") echo "[0]os: $OS" 2>&1 | tee -a ${logfile}
+    "Linux") echo "[0]os: $OS" >> ${logfile} 2>&1
     ;;
     *) die "$OS not supported"
     ;;
@@ -44,6 +44,40 @@ sub_init_echo_archives() {
         pg1302)  echo "https://ftp.postgresql.org/pub/source/v13.2/postgresql-13.2.tar.gz"
         ;;
         *     )  die "Unknown version $option"
+        ;;
+    esac
+}
+
+
+sub_in(){
+    if [ ! $G_DEV_PATH ]
+    then
+        die "Need environment variable G_DEV_PATH"
+    fi
+
+    if [ $# != 2 ]
+    then
+        echo "USAGE: in [ver] [port]"
+        echo "e.g. : in pg1016 8400"
+	exit 1
+    fi
+
+    if type wget > /dev/null ; then
+        fetch='wget'
+    else
+        fetch='curl -LO -u anonymous:'
+    fi
+
+    local port=$2
+    [ ${port} ] ||  die "No port"
+    local directory=${G_DEV_PATH}
+    local addr=$(sub_init_echo_archives $1)
+    local filename=${addr##*/}
+    local filena=${filename::-7}
+    echo "[1]check root directory" 2>&1 | tee -a ${logfile}
+    [ -d "${directory}" ]          ||  die "No base directory: ${directory}"
+    [ -d "${directory}/download" ] ||  mkdir ${directory}/download
+    [ -d "${directory}/src" ]      ||  mkdir ${directory}/src
     [ -d "${directory}/data" ]     ||  mkdir ${directory}/data
     [ -d "${directory}/bin" ]      ||  mkdir ${directory}/bin
     echo "[2]download source code: $filename" 2>&1 | tee -a ${logfile}
@@ -56,133 +90,101 @@ sub_init_echo_archives() {
 
     echo "[5]sysctl"  2>&1 | tee -a ${logfile}
 
-    echo "[6]configure port: ${port}"
+    echo "[6]configure port: ${port}" | tee -a ${logfile}
     cd ${directory}/src/${filena} && ./configure --prefix=${directory}/bin/$1 --with-pgport=${port} --enable-depend --enable-cassert --enable-debug CFLAGS="-ggdb -O0" >> ${logfile} 2>&1 || die "configure failed"
 
-    echo "[7]make&make install"
+    echo "[7]make&make install" | tee -a ${logfile}
     cd ${directory}/src/${filena} && make -j16  >> ${logfile} 2>&1 || die "make failed"
     cd ${directory}/src/${filena} && make install >> ${logfile} 2>&1 || die "make install failed"
 
+    echo "[8]initdb" | tee -a ${logfile}
+    # initdb -D ${pgdata} -E UTF8 --lc-collate=C --lc-ctype=en_US.utf8 -U postgres -X /io/pgxlog
+    local pgbin=${directory}/bin/$1/bin
+    local pgdata=${directory}/data/pg${port}
+    ${pgbin}/initdb -D ${pgdata} -E UTF8 --lc-collate=C --lc-ctype=en_US.utf8 -X ${pgdata}/pgxlog${port} >> ${logfile} 2>&1 || die "Initdb failed"
+
+    echo "[9]config db" | tee -a ${logfile}
+    sed -ir "s/#*port.*/port = ${port}/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*listen_addresses.*/listen_addresses = '0.0.0.0'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*unix_socket_directories.*/unix_socket_directories = '.'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*superuser_reserved_connections.*/superuser_reserved_connections = 13/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*logging_collector.*/logging_collector= on/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_directory.*/log_directory = 'pg_log'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_filename.*/log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_rotation_size.*/log_rotation_size = 10MB/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_line_prefix.*/log_line_prefix='%p %r %u %d %t %e'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_min_duration_statement.*/log_min_duration_statement= 1000/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_timezone.*/log_timezone = 'UTC'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_truncate_on_rotation.*/log_truncate_on_rotation = on/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_rotation_age.*/log_rotation_age = 0/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*log_statement.*/log_statement= 'all'/" ${pgdata}/postgresql.conf
+    sed -ir "s/#*max_prepared_transactions.*/max_prepared_transactions= 800/" ${pgdata}/postgresql.conf
+
+    echo "[10]start db" | tee -a ${logfile}
+    ${pgbin}/pg_ctl start -D ${pgdata} >> ${logfile} 2>&1 || die "Startdb failed"
+
 }
 
-sub_run(){
-    echo "Running 'baz' command."
-    echo "First arg is '$1'."
-    echo "Second arg is '$2'."
-}
-
-sub_stop(){
-    echo "stop"
-}
-
-
-
-subcommand=$1
-case $subcommand in
-    "" | "-h" | "--help")
-        sub_help
-        ;;
-    *)
-        shift
-        sub_${subcommand} $@
-        if [ $? = 127 ]; then
-            echo "Error: '$subcommand' is not a known subcommand." >&2
-            echo "       Run '$program --help' for a list of known subcommands." >&2
-            exit 1
-        fi
-        ;;
-esac
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> mingjie.gmj]#Shared connection to 47.115.202.83 closed.
-➜  ~
-➜  ~ k 47.115.202.83
-Last login: Wed May 12 11:00:41 2021 from 42.120.75.149
-
-Welcome to Alibaba Cloud Elastic Compute Service !
-
-User Tips:
-For better compatibility, Alibaba Cloud Linux 2 manages network settings via
-network-scripts by default instead of former systemd-networkd.
-More details please refer to:
-https://help.aliyun.com/knowledge_detail/182049.html
-
-3 package(s) needed for security, out of 20 available
-Run "yum update" to apply all updates.
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> ~]#
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> ~]#
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> ~]#
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> ~]#ll
-总用量 111172
-drwxr-xr-x 23 root        root             4096 4月  26 11:44 ctags
-drwxr-xr-x 41 mingjie.gmj mingjie.gmj      4096 5月   7 16:43 gcc-8.2.0
--rw-r--r--  1 root        root        113811063 7月  26 2018 gcc-8.2.0.tar.gz
--rw-r--r--  1 root        root              418 5月  10 15:51 gsql.c
--rwxr--r--  1 root        root              835 5月  11 11:32 gsql.sh
-drwxr-xr-x  7 root        root             4096 5月   7 16:21 rotate
--rwxr--r--  1 root        root             1912 5月  11 16:43 rs
-[root@iZf8z9gws1chrnriffp6pjZ<Controller> ~]#cat rs
-#!/bin/sh
-echo 000:$0
-echo 111:$1
-echo 222:$2
-program='gsql'
-version='(unversioned)'
-
-die() {
-    echo "error: $@" >&2
-    exit 1
-}
-
-sub_help(){
-    echo "Usage: $program <subcommand> [options]\n"
-    echo "Subcommands:"
-    echo "    bar   Do bar"
-    echo "    baz   Run baz"
-    echo ""
-    echo "For help with each subcommand run:"
-    echo "$program <subcommand> -h|--help"
-    echo ""
-}
-
-sub_init_echo_archives() {
-    option=$1
-    case $option
-    in
-        pg1016)  echo "https://ftp.postgresql.org/pub/source/v10.16/postgresql-10.16.tar.gz"
-        ;;
-        pg1111)  echo "https://ftp.postgresql.org/pub/source/v11.11/postgresql-11.11.tar.gz"
-        ;;
-        pg1206)  echo "https://ftp.postgresql.org/pub/source/v12.6/postgresql-12.6.tar.gz"
-        ;;
-        pg1302)  echo "https://ftp.postgresql.org/pub/source/v13.2/postgresql-13.2.tar.gz"
-        ;;
-        *     )  die "Unknown version $option"
-        ;;
-    esac
-}
-
-
-sub_init(){
-    base_url='https://www.postgresql.org/ftp/source'
-    echo "[1] Start downloading at $base_url"
-    if type wget > /dev/null ; then
-        fetch='wget'
-    else
-        fetch='curl -LO -u anonymous:'
+sub_ps(){
+    if [ ! $G_DEV_PATH ]
+    then
+        die "Need environment variable G_DEV_PATH"
     fi
-    directory=$2
-    for ar in $(sub_init_echo_archives $1)
-    do
-        echo $ar
-    done
-    [ -d "${directory}" ] || die "No base directory: ${directory}"
-    [ -d "${directory}/$1" ] || mkdir -p ${directory}/$1
+
+    if [ $# != 2 ]
+    then
+        echo "USAGE: ps [ver] [port]"
+        echo "e.g. : ps pg1016 8400"
+	exit 1
+    fi
+
+    local port=$2
+    [ ${port} ] ||  die "No port"
+    local directory=${G_DEV_PATH}
+    local pgbin=${directory}/bin/$1/bin
+    ${pgbin}/psql -h127.0.0.1 -p${port} postgres
 }
 
-sub_run(){
-    echo "Running 'baz' command."
-    echo "First arg is '$1'."
-    echo "Second arg is '$2'."
+sub_gd(){
+    if [ ! $G_DEV_PATH ]
+    then
+        die "Need environment variable G_DEV_PATH"
+    fi
+
+    if [ $# != 1 ]
+    then
+        echo "USAGE: gd [ver]"
+	echo "e.g. : gd pg1016"
+	exit 1
+    fi
+
+    local directory=${G_DEV_PATH}
+    local pgbin=${directory}/bin/$1/bin
+    local processid=$(ps -ef --sort=lstart | egrep [p]ostgres | tail -n 1 | awk '{print $2}')
+    gdb ${pgbin}/postgres ${processid}
 }
+
+sub_re(){
+    if [ ! $G_DEV_PATH ]
+    then
+        die "Need environment variable G_DEV_PATH"
+    fi
+
+    if [ $# != 2 ]
+    then
+        echo "USAGE: rs [ver] [port]"
+        echo "e.g. : rs pg1016 8400"
+	exit 1
+    fi
+
+    local port=$2
+    [ ${port} ] ||  die "No port"
+    local directory=${G_DEV_PATH}
+    local pgbin=${directory}/bin/$1/bin
+    local pgdata=${directory}/data/pg${port}
+    ${pgbin}/pg_ctl restart -D ${pgdata}
+}
+
 
 sub_stop(){
     echo "stop"
