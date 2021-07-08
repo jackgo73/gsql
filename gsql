@@ -35,7 +35,7 @@ sub_init_echo_archives() {
     option=$1
     case $option
     in
-        pg1016)  echo "https://ftp.postgresql.org/pub/source/v10.16/postgresql-10.16.tar.gz"
+        pg1017)  echo "https://ftp.postgresql.org/pub/source/v10.17/postgresql-10.17.tar.gz"
         ;;
         pg1111)  echo "https://ftp.postgresql.org/pub/source/v11.11/postgresql-11.11.tar.gz"
         ;;
@@ -86,7 +86,7 @@ sub_in(){
     [ -d "${directory}/src/${filena}" ] || tar xzf "${directory}/download/${filename}" -C ${directory}/src/ >> ${logfile} 2>&1 || die "Cannot extract package from ${filename}"
 
     echo "[4]yum install" 2>&1 | tee -a ${logfile}
-    sudo yum -y install coreutils glib2 lrzsz mpstat dstat sysstat e4fsprogs xfsprogs ntp readline-devel zlib-devel openssl-devel pam-devel libxml2-devel libxslt-devel python-devel tcl-devel gcc make smartmontools flex bison perl-devel perl-ExtUtils* openldap-devel jadetex openjade bzip2 >> ${logfile} 2>&1 || die "echo \"$USER ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/test"
+    # sudo yum -y install coreutils glib2 lrzsz dstat sysstat e4fsprogs xfsprogs readline-devel readline-static zlib-devel openssl-devel pam-devel libxml2-devel libxslt-devel tcl-devel gcc make smartmontools flex bison perl-devel perl-ExtUtils* openldap-devel jadetex openjade bzip2 >> ${logfile} 2>&1 || die "echo \"$USER ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/test"
 
     echo "[5]sysctl"  2>&1 | tee -a ${logfile}
 
@@ -164,26 +164,28 @@ sub_gd(){
     gdb ${pgbin}/postgres ${processid}
 }
 
-sub_re(){
+sub_ct(){
     if [ ! $G_DEV_PATH ]
     then
         die "Need environment variable G_DEV_PATH"
     fi
 
-    if [ $# != 2 ]
+    if [ $# != 3 ]
     then
-        echo "USAGE: rs [ver] [port]"
-        echo "e.g. : rs pg1016 8400"
+        echo "USAGE: ct [ver] [port] [cmd]"
+        echo "e.g. : ct pg1017 8401 stop"
 	exit 1
     fi
 
     local port=$2
+    local cmd=$3
     [ ${port} ] ||  die "No port"
     local directory=${G_DEV_PATH}
     local pgbin=${directory}/bin/$1/bin
     local pgdata=${directory}/data/pg${port}
-    ${pgbin}/pg_ctl restart -D ${pgdata}
+    ${pgbin}/pg_ctl ${cmd} -D ${pgdata}
 }
+
 
 
 sub_stop(){
