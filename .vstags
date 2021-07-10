@@ -5,5 +5,12 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.8	//
 GsqlLib	GsqlLib.pm	1;"	p
-GsqlLib::system_log	GsqlLib.pm	35;"	s
-system_log	GsqlLib.pm	35;"	s
+GsqlLib::system_log	GsqlLib.pm	95;"	s
+GsqlLib::tempdir	GsqlLib.pm	104;"	s
+PRINT	SimpleTee.pm	11;"	s
+SimpleTee	SimpleTee.pm	2;"	p
+SimpleTee::PRINT	SimpleTee.pm	11;"	s
+SimpleTee::TIEHANDLE	SimpleTee.pm	5;"	s
+TIEHANDLE	SimpleTee.pm	5;"	s
+system_log	GsqlLib.pm	95;"	s
+tempdir	GsqlLib.pm	104;"	s

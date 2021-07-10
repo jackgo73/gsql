@@ -2,6 +2,7 @@
 
 use GsqlLib;
 
-print system_log('echo 1'),"\n";
+use strict;
+use warnings;
 
-print $0,"\n";
+print("# dddddd\n");
