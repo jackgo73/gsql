@@ -1,0 +1,8 @@
+
+# git branch -M main
+
+git config user.email "jackgo73@outlook.com"
+git config user.name "jackgo73"
+git add .
+git commit -m "update"
+git push -u origin main
